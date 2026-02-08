@@ -489,7 +489,7 @@ const UI = {
             <ul class="nav-links">
                 ${dashLink}
                 ${[ROLES.CORE_TEAM, ROLES.SUPERVISOR].includes(user.role) ? '<li><a href="onboarding.html" id="nav-onboard">Client Onboarding</a></li>' : ''}
-                ${[ROLES.CORE_TEAM, ROLES.SUPERVISOR, ROLES.ASSESSOR].includes(user.role) ? '<li><a href="assessment.html" id="nav-assess">Assessments</a></li>' : ''}
+                ${[ROLES.CORE_TEAM, ROLES.SUPERVISOR, ROLES.ASSESSOR, ROLES.INTERVENOR, ROLES.WELFARE, ROLES.FOLLOWUP].includes(user.role) ? '<li><a href="assessment.html" id="nav-assess">Assessments</a></li>' : ''}
                 ${[ROLES.CORE_TEAM, ROLES.SUPERVISOR, ROLES.INTERVENOR].includes(user.role) ? '<li><a href="intervention.html" id="nav-intervene">Interventions</a></li>' : ''}
                 ${(user.role === ROLES.CORE_TEAM || user.role === ROLES.WELFARE || user.username === 'scovia') ? '<li><a href="welfare.html" id="nav-welfare">Welfare Support</a></li>' : ''}
                 ${[ROLES.CORE_TEAM, ROLES.SUPERVISOR, ROLES.FOLLOWUP].includes(user.role) ? '<li><a href="followup.html" id="nav-followup">Follow-up Tracking</a></li>' : ''}

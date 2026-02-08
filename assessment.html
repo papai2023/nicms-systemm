@@ -103,7 +103,7 @@
 
     <script src="app.js"></script>
     <script>
-        Auth.enforceRole([ROLES.CORE_TEAM, ROLES.SUPERVISOR, ROLES.ASSESSOR]);
+        Auth.enforceRole([ROLES.CORE_TEAM, ROLES.SUPERVISOR, ROLES.ASSESSOR, ROLES.INTERVENOR, ROLES.WELFARE, ROLES.FOLLOWUP]);
         UI.renderNav();
 
         const urlParams = new URLSearchParams(window.location.search);
