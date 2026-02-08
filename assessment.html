@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NICMS - Assessment</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <nav id="sidebar" class="sidebar">
+            <!-- Populated by JS -->
+        </nav>
+        
+        <main class="main-content">
+            <header class="mb-20">
+                <h1>Clinical Assessment</h1>
+                <p>Conduct assessments and determine severity classification.</p>
+            </header>
+
+            <div id="alert-box"></div>
+
+            <!-- VIEW 1: Case List -->
+            <div id="case-list-view">
+                <div class="table-responsive">
+                    <h3>Pending Assessments</h3>
+                    <table id="assessment-queue-table">
+                        <thead>
+                            <tr>
+                                <th>Case ID</th>
+                                <th>Referred Facility</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- VIEW 2: Assessment Form -->
+            <div id="assessment-form-view" class="hidden">
+                <button onclick="window.location.href='assessment.html'" class="btn btn-secondary mb-20">&larr; Back to Queue</button>
+                
+                <div class="stat-card mb-20">
+                    <h3>Case Details: <span id="case-id-display"></span></h3>
+                    <p><strong>Name:</strong> <span id="client-name-display"></span></p>
+                    <p><strong>Presenting Concerns:</strong> <span id="client-concerns-display"></span></p>
+                </div>
+
+                <div class="stat-card">
+                    <form id="assessment-form">
+                        <h3>Assessment Tools</h3>
+                        <p class="mb-20">Rate the client on the following domains (0 = No Concern, 5 = Severe Concern).</p>
+
+                        <div class="form-group">
+                            <label>1. Developmental Milestones (Motor, Speech, Cognitive)</label>
+                            <input type="range" id="score-dev" min="0" max="5" value="0" class="form-control" oninput="updateTotal()">
+                            <div style="display:flex; justify-content:space-between;"><span>Normal (0)</span><span>Severe Delay (5)</span></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>2. Behavioral Observations (Attention, Hyperactivity, Aggression)</label>
+                            <input type="range" id="score-beh" min="0" max="5" value="0" class="form-control" oninput="updateTotal()">
+                            <div style="display:flex; justify-content:space-between;"><span>Typical (0)</span><span>Significant Concern (5)</span></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>3. Social Communication & Interaction</label>
+                            <input type="range" id="score-soc" min="0" max="5" value="0" class="form-control" oninput="updateTotal()">
+                            <div style="display:flex; justify-content:space-between;"><span>Appropriate (0)</span><span>Severe Deficit (5)</span></div>
+                        </div>
+
+                        <div class="stat-card warning mt-20" style="text-align: center;">
+                            <h4>Calculated Severity Score: <span id="total-score">0</span></h4>
+                            <h2 id="severity-result">Mild</h2>
+                            <p id="recommendation-text">Community Support Recommended</p>
+                        </div>
+
+                        <div class="form-group mt-20">
+                            <label>Clinical Notes / Observations</label>
+                            <textarea id="assessment-notes" class="form-control" rows="4" required></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Provisional Classification</label>
+                            <select id="classification" class="form-control" required>
+                                <option value="">Select...</option>
+                                <option value="ASD">Autism Spectrum Disorder (ASD)</option>
+                                <option value="ADHD">ADHD</option>
+                                <option value="ID">Intellectual Disability</option>
+                                <option value="Learning Disorder">Specific Learning Disorder</option>
+                                <option value="Global Delay">Global Developmental Delay</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-block">Submit Assessment</button>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        Auth.enforceRole([ROLES.CORE_TEAM, ROLES.SUPERVISOR, ROLES.ASSESSOR]);
+        UI.renderNav();
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const caseId = urlParams.get('id');
+        const user = Auth.getUser();
+        (async function start() {
+
+        function updateTotal() {
+            const dev = parseInt(document.getElementById('score-dev').value);
+            const beh = parseInt(document.getElementById('score-beh').value);
+            const soc = parseInt(document.getElementById('score-soc').value);
+            const total = dev + beh + soc;
+            
+            document.getElementById('total-score').textContent = total;
+
+            const scores = { dev, beh, soc };
+            const severity = Logic.calculateSeverity(scores);
+            const resultEl = document.getElementById('severity-result');
+            const recEl = document.getElementById('recommendation-text');
+
+            resultEl.textContent = severity;
+            
+            if (severity === 'Mild') {
+                resultEl.style.color = 'green';
+                recEl.textContent = "Community Support Recommended";
+            } else if (severity === 'Moderate') {
+                resultEl.style.color = 'orange';
+                recEl.textContent = "Structured Intervention Recommended";
+            } else {
+                resultEl.style.color = 'red';
+                recEl.textContent = "ESCALATION TRIGGERED: Specialist Referral Required";
+            }
+        }
+
+        if (caseId) {
+            // Assessment Form View
+            document.getElementById('case-list-view').classList.add('hidden');
+            document.getElementById('assessment-form-view').classList.remove('hidden');
+
+            const cases = await DB.fetchCases();
+            const currentCase = cases.find(c => c.id === caseId);
+
+            if (!currentCase) {
+                alert("Case not found!");
+                window.location.href = 'assessment.html';
+            }
+
+            // Extended view users can access the form now, so we remove the block.
+            // Previous block was: if (user.limitedReferralView) ...
+
+            document.getElementById('case-id-display').textContent = currentCase.id;
+            document.getElementById('client-name-display').textContent = currentCase.name;
+            document.getElementById('client-concerns-display').textContent = currentCase.concerns;
+
+            document.getElementById('assessment-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                
+                const scores = {
+                    dev: parseInt(document.getElementById('score-dev').value),
+                    beh: parseInt(document.getElementById('score-beh').value),
+                    soc: parseInt(document.getElementById('score-soc').value)
+                };
+                
+                const severity = Logic.calculateSeverity(scores);
+
+                currentCase.status = 'Intervention';
+                currentCase.severity = severity;
+                currentCase.assessmentDate = new Date().toISOString();
+                currentCase.assessedBy = user.username;
+                currentCase.classification = document.getElementById('classification').value;
+                currentCase.assessmentNotes = document.getElementById('assessment-notes').value;
+                currentCase.scores = scores;
+
+                // Handle Escalation
+                if (severity === 'Severe') {
+                    currentCase.isEscalated = true;
+                    currentCase.escalationReason = "High Severity Score";
+                    DB.addLog('Escalation Triggered', `Case ${currentCase.id} flagged as SEVERE.`);
+                    alert("WARNING: This case has been flagged for ESCALATION to the Core Team.");
+                }
+
+                DB.saveCase(currentCase);
+                DB.addLog('Assessment Completed', `Assessed ${currentCase.id} as ${severity}`);
+                
+                window.location.href = 'dashboard.html';
+            });
+
+        } else {
+            // Queue View
+            const tbody = document.querySelector('#assessment-queue-table tbody');
+            const theadTr = document.querySelector('#assessment-queue-table thead tr');
+            
+            // Adjust headers if user has extended referral view
+            if (user.extendedReferralView) {
+                // Check if column already exists to avoid duplication if re-run
+                if (!theadTr.innerHTML.includes('Referred To')) {
+                     theadTr.innerHTML = `
+                        <th>Case ID</th>
+                        <th>Client Name</th>
+                        <th>Age</th>
+                        <th>Concerns</th>
+                        <th>Referred To</th>
+                        <th>Referral Time</th>
+                        <th>Action</th>
+                    `;
+                }
+            }
+
+            const allCases = await DB.fetchCases();
+            
+            // Filter: Status = Assessment OR Identification OR Intervention OR Referred, AND matches User County
+            const pendingCases = allCases.filter(c => {
+                // We broaden the filter to include cases that have been assessed or referred
+                // so we can show the reports as requested.
+                const relevantStatus = ['Identification', 'Assessment', 'Intervention', 'Referred'].includes(c.status) || c.assessmentDate;
+                const canAccess = Auth.canAccessCounty(c.county);
+                return relevantStatus && canAccess;
+            });
+
+            if (pendingCases.length === 0) {
+                const colSpan = user.extendedReferralView ? 7 : 5;
+                tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align:center;">No cases found.</td></tr>`;
+            } else {
+                pendingCases.forEach(c => {
+                    const tr = document.createElement('tr');
+                    const referralInfo = c.referral && c.referral.partner ? c.referral.partner : '-';
+                    const referralTime = c.referral && c.referral.date ? new Date(c.referral.date).toLocaleString() : '-';
+                    
+                    let extraCells = '';
+                    if (user.extendedReferralView) {
+                        extraCells = `<td>${referralInfo}</td><td>${referralTime}</td>`;
+                    }
+                    
+                    // Logic for Action Buttons
+                    let actionButtons = '';
+                    const isAssessed = !!c.assessmentDate;
+                    const isReferred = !!c.referral; // Assuming referral implies "severely referred" context
+
+                    if (isReferred) {
+                        // "remove assessments to any already severly referred client but let the referral report appear"
+                        actionButtons = `<button class="btn btn-info" onclick="viewReferralReport('${c.id}')">Referral Report</button>`;
+                    } else if (isAssessed) {
+                        // "to any client that assessment has already be done let the assessment option show the assessment report"
+                        actionButtons = `<button class="btn btn-success" onclick="viewAssessmentReport('${c.id}')">Assessment Report</button>`;
+                    } else {
+                        // Default
+                        actionButtons = `<a href="assessment.html?id=${c.id}" class="btn btn-primary">Start Assessment</a>`;
+                    }
+
+                    if (user.extendedReferralView) {
+                        actionButtons += ` <button class="btn btn-secondary" style="margin-left:5px;" onclick="openProgressModal('${c.id}')">Report Progress</button>`;
+                    }
+
+                    tr.innerHTML = `
+                        <td>${c.id}</td>
+                        <td>${c.name}</td>
+                        <td>${c.dob}</td>
+                        <td>${c.concerns.substring(0, 50)}...</td>
+                        ${extraCells}
+                        <td>${actionButtons}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+        
+        // --- Report Viewing Logic ---
+        window.viewReferralReport = async (caseId) => {
+            const client = (await DB.fetchCases()).find(c => c.id === caseId);
+            if (!client || !client.referral) return alert("No referral data found.");
+            
+            const r = client.referral;
+            const content = `
+                <p><strong>Referred To:</strong> ${r.partner}</p>
+                <p><strong>Date:</strong> ${new Date(r.date).toLocaleString()}</p>
+                <p><strong>Urgency:</strong> ${r.urgency}</p>
+                <p><strong>Reason:</strong> ${r.reason}</p>
+                <p><strong>Referred By:</strong> ${r.referredBy}</p>
+            `;
+            showReportModal(`Referral Report: ${client.name}`, content);
+        };
+
+        window.viewAssessmentReport = async (caseId) => {
+            const client = (await DB.fetchCases()).find(c => c.id === caseId);
+            if (!client || !client.assessmentDate) return alert("No assessment data found.");
+            
+            const s = client.scores || {};
+            const content = `
+                <p><strong>Assessment Date:</strong> ${new Date(client.assessmentDate).toLocaleString()}</p>
+                <p><strong>Assessed By:</strong> ${client.assessedBy}</p>
+                <p><strong>Severity:</strong> <span style="color:${client.severity === 'Severe' ? 'red' : client.severity === 'Moderate' ? 'orange' : 'green'}">${client.severity}</span></p>
+                <p><strong>Classification:</strong> ${client.classification}</p>
+                <hr>
+                <p><strong>Scores:</strong> Dev: ${s.dev || 0}, Beh: ${s.beh || 0}, Soc: ${s.soc || 0} (Total: ${(s.dev||0)+(s.beh||0)+(s.soc||0)})</p>
+                <p><strong>Notes:</strong> ${client.assessmentNotes}</p>
+            `;
+            showReportModal(`Assessment Report: ${client.name}`, content);
+        };
+
+        window.showReportModal = (title, contentHTML) => {
+            // Check if modal exists, create if not
+            if (!document.getElementById('report-display-modal')) {
+                const modalHTML = `
+                <div id="report-display-modal" class="stat-card hidden" style="position: fixed; top: 20%; left: 50%; transform: translate(-50%, 0); width: 50%; z-index: 1001; box-shadow: 0 4px 6px rgba(0,0,0,0.2); border: 2px solid var(--primary-color); max-height: 70vh; overflow-y: auto;">
+                    <h3 id="report-display-title"></h3>
+                    <div id="report-display-content" class="mb-20"></div>
+                    <div style="text-align: right;">
+                        <button class="btn btn-secondary" onclick="closeReportModal()">Close</button>
+                    </div>
+                </div>
+                <div id="report-backdrop" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;" onclick="closeReportModal()"></div>
+                `;
+                document.body.insertAdjacentHTML('beforeend', modalHTML);
+            }
+            
+            document.getElementById('report-display-title').textContent = title;
+            document.getElementById('report-display-content').innerHTML = contentHTML;
+            document.getElementById('report-display-modal').classList.remove('hidden');
+            document.getElementById('report-backdrop').classList.remove('hidden');
+        };
+
+        window.closeReportModal = () => {
+             const m = document.getElementById('report-display-modal');
+             const b = document.getElementById('report-backdrop');
+             if(m) m.classList.add('hidden');
+             if(b) b.classList.add('hidden');
+        };
+
+        // --- Progress Reporting Modal Logic (Added for extendedReferralView) ---
+        window.openProgressModal = async (caseId) => {
+            const client = (await DB.fetchCases()).find(c => c.id === caseId);
+            document.getElementById('progress-case-id').value = caseId;
+            document.getElementById('progress-client-name').textContent = client.name;
+            document.getElementById('progress-modal').classList.remove('hidden');
+        };
+
+        window.closeProgressModal = () => {
+             document.getElementById('progress-modal').classList.add('hidden');
+             document.getElementById('progress-form').reset();
+        };
+
+        // We need to inject the modal into the DOM if it doesn't exist
+        if (!document.getElementById('progress-modal')) {
+            const modalHTML = `
+            <div id="progress-modal" class="stat-card mt-20 hidden" style="position: fixed; top: 20%; left: 50%; transform: translate(-50%, 0); width: 50%; z-index: 1000; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 2px solid var(--primary-color);">
+                <h3>Report Progress for <span id="progress-client-name"></span></h3>
+                <form id="progress-form">
+                    <input type="hidden" id="progress-case-id">
+                    <div class="form-group">
+                        <label>Progress Update / Notes</label>
+                        <textarea id="progress-notes" class="form-control" rows="4" required placeholder="Describe current status and progress..."></textarea>
+                    </div>
+                    <div class="form-group" style="text-align: right;">
+                        <button type="button" class="btn btn-danger" onclick="closeProgressModal()">Cancel</button>
+                        <button type="submit" class="btn btn-success">Save Progress</button>
+                    </div>
+                </form>
+            </div>
+            <div id="progress-backdrop" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999;" onclick="closeProgressModal()"></div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+            
+            // Add event listener for the form
+            document.getElementById('progress-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const caseId = document.getElementById('progress-case-id').value;
+                const notes = document.getElementById('progress-notes').value;
+                const cases = await DB.fetchCases();
+                const client = cases.find(c => c.id === caseId);
+                
+                if (!client.progressReports) client.progressReports = [];
+                client.progressReports.push({
+                    date: new Date().toISOString(),
+                    officer: user.username,
+                    notes: notes
+                });
+                
+                DB.saveCase(client);
+                DB.addLog('Progress Reported', `Progress reported for ${client.name} by ${user.username}`);
+                
+                alert('Progress reported successfully!');
+                closeProgressModal();
+            });
+        }
+        })();
+    </script>
+</body>
+</html>

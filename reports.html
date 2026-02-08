@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NICMS - Reports</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .report-section { margin-bottom: 40px; }
+        .bar-chart { display: flex; align-items: flex-end; height: 200px; gap: 20px; padding: 20px; border-bottom: 2px solid #ddd; }
+        .bar-group { display: flex; flex-direction: column; align-items: center; flex: 1; }
+        .bar { width: 40px; background-color: var(--secondary-color); transition: height 0.5s; border-radius: 4px 4px 0 0; }
+        .bar-label { margin-top: 10px; font-size: 0.8rem; text-align: center; }
+        .bar-val { margin-bottom: 5px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <nav id="sidebar" class="sidebar">
+            <!-- Populated by JS -->
+        </nav>
+        
+        <main class="main-content">
+            <header class="mb-20" style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1>Reports & Analytics</h1>
+                    <p>Programmatic insights and donor-ready exports.</p>
+                </div>
+                <div>
+                    <button class="btn btn-primary" onclick="alert('Downloading CSV...')">Export CSV</button>
+                    <button class="btn btn-danger" onclick="alert('Downloading PDF...')">Export PDF</button>
+                </div>
+            </header>
+
+            <div class="report-section" id="severity-section">
+                <h3>Case Severity Distribution</h3>
+                <div class="stat-card">
+                    <div class="bar-chart" id="severity-chart">
+                        <!-- Bars injected via JS -->
+                    </div>
+                </div>
+            </div>
+            
+            <div class="report-section" id="online-staff-section" style="display:none;">
+                <h3>Online Staff</h3>
+                <div class="table-responsive">
+                    <table id="online-staff-table">
+                        <thead>
+                            <tr>
+                                <th>Staff Member</th>
+                                <th>Role</th>
+                                <th>Online Since</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="report-section" id="county-section">
+                <h3>Cases by County</h3>
+                <div class="table-responsive">
+                    <table id="county-table">
+                        <thead>
+                            <tr>
+                                <th>County</th>
+                                <th>Total Cases</th>
+                                <th>Mild</th>
+                                <th>Moderate</th>
+                                <th>Severe</th>
+                                <th>Escalated</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="report-section">
+                <h3>Staff Performance (Caseload)</h3>
+                <div class="table-responsive">
+                    <table id="staff-table">
+                        <thead>
+                            <tr>
+                                <th>Staff Member</th>
+                                <th>Role</th>
+                                <th>Assigned Cases</th>
+                                <th>Last Active</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="report-section">
+                <h3>User Logins</h3>
+                <div class="table-responsive">
+                    <table id="logins-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Username</th>
+                                <th>Role</th>
+                                <th>Action</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="report-section" id="activity-times-section" style="display:none;">
+                <h3>Activity Times (Core Team)</h3>
+                <div class="table-responsive">
+                    <table id="activity-times-table">
+                        <thead>
+                            <tr>
+                                <th>Action</th>
+                                <th>Officer</th>
+                                <th>Date</th>
+                                <th>Time</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        Auth.enforceRole([ROLES.CORE_TEAM, ROLES.SUPERVISOR]);
+        UI.renderNav();
+        const user = Auth.getUser();
+        const allowedViewersSet = new Set(['maxwel','rosemary']);
+        const canViewLogs = allowedViewersSet.has(user.username);
+        const params = new URLSearchParams(window.location.search);
+        const isTrackView = params.get('view') === 'track-record';
+
+        // Security Check (Redundant but keeps logic safe)
+        if (![ROLES.CORE_TEAM, ROLES.SUPERVISOR].includes(user.role)) {
+            alert("Access Denied");
+            window.location.href = 'dashboard.html';
+        }
+
+        (async function initReports() {
+        const cases = await DB.fetchCases();
+        const allUsers = await DB.fetchUsers();
+        
+        // --- Severity Chart Data ---
+        const severityCounts = { Mild: 0, Moderate: 0, Severe: 0 };
+        cases.forEach(c => {
+            if (c.severity) severityCounts[c.severity]++;
+        });
+        const maxVal = Math.max(...Object.values(severityCounts), 10); // Scale
+
+        const chartHTML = Object.keys(severityCounts).map(k => {
+            const count = severityCounts[k];
+            const height = (count / maxVal) * 100;
+            let color = '#27ae60';
+            if(k === 'Moderate') color = '#f39c12';
+            if(k === 'Severe') color = '#e74c3c';
+            
+            return `
+                <div class="bar-group">
+                    <span class="bar-val">${count}</span>
+                    <div class="bar" style="height: ${height}%; background-color: ${color};"></div>
+                    <span class="bar-label">${k}</span>
+                </div>
+            `;
+        }).join('');
+        document.getElementById('severity-chart').innerHTML = chartHTML;
+        if (isTrackView && canViewLogs) {
+            document.getElementById('severity-section').style.display = 'none';
+        }
+
+
+        // --- County Table Data ---
+        const countyStats = {};
+        cases.forEach(c => {
+            if (!countyStats[c.county]) countyStats[c.county] = { total: 0, mild: 0, mod: 0, sev: 0, esc: 0 };
+            countyStats[c.county].total++;
+            if(c.severity === 'Mild') countyStats[c.county].mild++;
+            if(c.severity === 'Moderate') countyStats[c.county].mod++;
+            if(c.severity === 'Severe') countyStats[c.county].sev++;
+            if(c.isEscalated) countyStats[c.county].esc++;
+        });
+
+        const countyBody = document.querySelector('#county-table tbody');
+        if (isTrackView && canViewLogs) {
+            document.getElementById('county-section').style.display = 'none';
+        }
+        if (Object.keys(countyStats).length === 0) {
+            countyBody.innerHTML = '<tr><td colspan="6">No data available.</td></tr>';
+        } else {
+            Object.keys(countyStats).forEach(county => {
+                // Filter for Supervisor
+                if (user.role === ROLES.SUPERVISOR) {
+                    if (Array.isArray(user.accessibleCounties)) {
+                        if (!user.accessibleCounties.includes(county)) return;
+                    } else if (user.county && user.county !== county) {
+                        return;
+                    }
+                }
+
+                const s = countyStats[county];
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${county}</td>
+                    <td>${s.total}</td>
+                    <td>${s.mild}</td>
+                    <td>${s.mod}</td>
+                    <td>${s.sev}</td>
+                    <td><span class="badge badge-severe">${s.esc}</span></td>
+                `;
+                countyBody.appendChild(tr);
+            });
+        }
+        
+        // --- Staff Performance (Caseload) ---
+        function coversCounty(u, county) {
+            if (u.role === ROLES.CORE_TEAM || u.county === 'All') return true;
+            if (Array.isArray(u.accessibleCounties)) return u.accessibleCounties.includes(county);
+            return u.county === county;
+        }
+        function hasCoverageOverlap(viewer, staff) {
+            if (viewer.role === ROLES.CORE_TEAM || viewer.county === 'All') return true;
+            if (Array.isArray(viewer.accessibleCounties)) {
+                if (Array.isArray(staff.accessibleCounties)) {
+                    return staff.accessibleCounties.some(c => viewer.accessibleCounties.includes(c));
+                } else {
+                    return viewer.accessibleCounties.includes(staff.county);
+                }
+            } else {
+                if (Array.isArray(staff.accessibleCounties)) {
+                    return staff.accessibleCounties.includes(viewer.county);
+                } else {
+                    return staff.county === viewer.county;
+                }
+            }
+        }
+        const staffBody = document.querySelector('#staff-table tbody');
+        staffBody.innerHTML = '';
+        const staffSection = document.getElementById('staff-table').closest('.report-section');
+        if (!canViewLogs) {
+            staffSection.style.display = 'none';
+        } else {
+            const staffUsers = allUsers.filter(u => [ROLES.ASSESSOR, ROLES.INTERVENOR, ROLES.WELFARE, ROLES.FOLLOWUP, ROLES.SUPERVISOR].includes(u.role));
+            if (staffUsers.length === 0) {
+                staffBody.innerHTML = '<tr><td colspan="4">No staff found.</td></tr>';
+            } else {
+                const logsAll = DB.getLogs();
+                const enriched = staffUsers.map(s => {
+                    const assigned = cases.filter(c => coversCounty(s, c.county)).length;
+                    const lastLog = logsAll.find(l => l.user === s.username);
+                    const lastTs = lastLog ? new Date(lastLog.timestamp).getTime() : 0;
+                    return { s, assigned, lastTs, lastActive: lastLog ? new Date(lastLog.timestamp).toLocaleString() : 'N/A' };
+                }).sort((a,b) => b.lastTs - a.lastTs);
+                enriched.forEach((item, idx) => {
+                    const tr = document.createElement('tr');
+                    if (idx >= 5) { tr.style.display = 'none'; tr.setAttribute('data-hidden','true'); }
+                    tr.innerHTML = `
+                        <td>${item.s.name}</td>
+                        <td>${item.s.role.replace('_', ' ')}</td>
+                        <td>${item.assigned}</td>
+                        <td>${item.lastActive}</td>
+                    `;
+                    staffBody.appendChild(tr);
+                });
+                if (enriched.length > 5) {
+                    const btn = document.createElement('button');
+                    btn.className = 'btn btn-secondary';
+                    btn.textContent = 'Show more';
+                    btn.onclick = () => {
+                        Array.from(staffBody.querySelectorAll('tr[data-hidden="true"]')).forEach(tr => tr.style.display = 'table-row');
+                        btn.remove();
+                    };
+                    document.getElementById('staff-table').parentElement.appendChild(btn);
+                }
+            }
+        }
+        
+        const loginsBody = document.querySelector('#logins-table tbody');
+        const logs = await DB.fetchLogs();
+        const loginSection = document.getElementById('logins-table').closest('.report-section');
+        if (!canViewLogs) {
+            loginSection.style.display = 'none';
+        }
+        const loginLogs = logs.filter(l => (l.action === 'Login' || l.action === 'Logout'));
+        loginsBody.innerHTML = '';
+        if (loginLogs.length === 0) {
+            loginsBody.innerHTML = '<tr><td colspan="5">No login activity recorded.</td></tr>';
+        } else {
+            loginLogs.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+            loginLogs.forEach((l, idx) => {
+                const tr = document.createElement('tr');
+                if (idx >= 5) { tr.style.display = 'none'; tr.setAttribute('data-hidden','true'); }
+                tr.innerHTML = `
+                    <td>${new Date(l.timestamp).toLocaleString()}</td>
+                    <td>${l.user}</td>
+                    <td>${l.role.replace('_',' ')}</td>
+                    <td>${l.action}</td>
+                    <td>${l.details}</td>
+                `;
+                loginsBody.appendChild(tr);
+            });
+            if (loginLogs.length > 5) {
+                const btn = document.createElement('button');
+                btn.className = 'btn btn-secondary';
+                btn.textContent = 'Show more';
+                btn.onclick = () => {
+                    Array.from(loginsBody.querySelectorAll('tr[data-hidden="true"]')).forEach(tr => tr.style.display = 'table-row');
+                    btn.remove();
+                };
+                document.getElementById('logins-table').parentElement.appendChild(btn);
+            }
+        }
+        
+        // Activity Times (12-hour clock) - Core Team only
+        if (user.role === ROLES.CORE_TEAM && canViewLogs) {
+            document.getElementById('activity-times-section').style.display = 'block';
+            const targetActions = new Set(['Client Registration', 'Assessment Completed', 'Intervention Logged']);
+            const activityLogs = (logs || []).filter(l => targetActions.has(l.action));
+            const tbody = document.querySelector('#activity-times-table tbody');
+            tbody.innerHTML = '';
+            if (activityLogs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No activity recorded.</td></tr>';
+            } else {
+                activityLogs.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+                activityLogs.forEach((l, idx) => {
+                    const d = new Date(l.timestamp);
+                    const dateStr = d.toLocaleDateString();
+                    const timeStr = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
+                    const tr = document.createElement('tr');
+                    if (idx >= 5) { tr.style.display = 'none'; tr.setAttribute('data-hidden','true'); }
+                    tr.innerHTML = `
+                        <td>${l.action}</td>
+                        <td>${l.user}</td>
+                        <td>${dateStr}</td>
+                        <td>${timeStr}</td>
+                        <td>${l.details || ''}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+                if (activityLogs.length > 5) {
+                    const btn = document.createElement('button');
+                    btn.className = 'btn btn-secondary';
+                    btn.textContent = 'Show more';
+                    btn.onclick = () => {
+                        Array.from(tbody.querySelectorAll('tr[data-hidden="true"]')).forEach(tr => tr.style.display = 'table-row');
+                        btn.remove();
+                    };
+                    document.getElementById('activity-times-table').parentElement.appendChild(btn);
+                }
+            }
+        } else {
+            document.getElementById('activity-times-section').style.display = 'none';
+        }
+        
+        // Online Staff (visible only to Maxwel/Rosemary)
+        if (canViewLogs) {
+            document.getElementById('online-staff-section').style.display = 'block';
+            const tbody = document.querySelector('#online-staff-table tbody');
+            const users = allUsers.filter(u => u.role !== ROLES.CORE_TEAM);
+            const logsAll = logs || [];
+            const online = users.map(u => {
+                const last = logsAll.find(l => l.user === u.username);
+                const isOnline = last && last.action === 'Login';
+                return isOnline ? { name: u.name, role: u.role, since: new Date(last.timestamp).toLocaleString() } : null;
+            }).filter(Boolean);
+            tbody.innerHTML = '';
+            if (online.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">No staff currently online.</td></tr>';
+            } else {
+                online.forEach(o => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${o.name}</td>
+                        <td>${o.role.replace('_',' ')}</td>
+                        <td>${o.since}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+        })();
+    </script>
+</body>
+</html>

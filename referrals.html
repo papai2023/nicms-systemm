@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NICMS - Referrals</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .badge-severe { background-color: #dc3545; color: white; }
+        .badge-referred { background-color: #28a745; color: white; }
+        .referral-card {
+            border-left: 5px solid var(--secondary-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <nav id="sidebar" class="sidebar">
+            <!-- Populated by JS -->
+        </nav>
+        
+        <main class="main-content">
+            <header class="mb-20">
+                <h1>External Referral Management</h1>
+                <p>Manage severe cases requiring external specialist care.</p>
+            </header>
+
+            <!-- Severe Cases List -->
+            <div class="stat-card mb-20 referral-card">
+                <h3>Severe Cases Pending Referral</h3>
+                <p class="text-muted">Cases flagged as "Severe" by the Assessment Engine.</p>
+                <div class="table-responsive">
+                    <table id="pending-referrals-table">
+                        <thead>
+                            <tr>
+                                <th>Case ID</th>
+                                <th>Client Name</th>
+                                <th>Severity</th>
+                                <th>Primary Condition</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Referral History -->
+            <div class="stat-card">
+                <h3>Referral History</h3>
+                <div class="table-responsive">
+                    <table id="referral-history-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Client</th>
+                                <th>Referred To</th>
+                                <th>Reason</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Referral Modal -->
+            <div id="referral-modal" class="stat-card mt-20 hidden" style="border: 2px solid var(--primary-color); position: fixed; top: 20%; left: 50%; transform: translate(-50%, 0); width: 50%; z-index: 1000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                <h3>Generate Referral Letter</h3>
+                <form id="referral-form">
+                    <input type="hidden" id="referral-case-id">
+                    <div class="form-group">
+                        <label>Client Name</label>
+                        <input type="text" id="referral-client-name" class="form-control" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>Referral Partner / Institution</label>
+                        <select id="referral-partner" class="form-control" required>
+                            <option value="">Select Partner...</option>
+                            <option value="National Referral Hospital">National Referral Hospital</option>
+                            <option value="Mathari National Teaching Hospital">Mathari National Teaching Hospital</option>
+                            <option value="Kenyatta National Hospital (KNH)">Kenyatta National Hospital (KNH)</option>
+                            <option value="Chiromo Hospital Group">Chiromo Hospital Group</option>
+                            <option value="AAR Healthcare">AAR Healthcare</option>
+                            <option value="Gertrude's Children's Hospital">Gertrude's Children's Hospital</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Reason for Referral</label>
+                        <textarea id="referral-reason" class="form-control" rows="3" required placeholder="Describe the escalation or need for specialized care..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Urgency</label>
+                        <select id="referral-urgency" class="form-control">
+                            <option value="Routine">Routine</option>
+                            <option value="Urgent">Urgent</option>
+                            <option value="Emergency">Emergency</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="text-align: right;">
+                        <button type="button" class="btn btn-danger" onclick="closeModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Generate & Save</button>
+                    </div>
+                </form>
+            </div>
+            <div id="modal-backdrop" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999;" onclick="closeModal()"></div>
+
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        Auth.enforceRole([ROLES.CORE_TEAM]); // STRICTLY CORE TEAM
+        UI.renderNav();
+        const user = Auth.getUser();
+
+        // --- Data Loading ---
+        let cases = [];
+        (async function initReferrals() {
+            cases = await DB.fetchCases();
+            loadTables();
+        })();
+        
+        function loadTables() {
+            const pendingBody = document.querySelector('#pending-referrals-table tbody');
+            const historyBody = document.querySelector('#referral-history-table tbody');
+            pendingBody.innerHTML = '';
+            historyBody.innerHTML = '';
+
+            // Filter Severe cases that haven't been referred yet
+            const severeCases = cases.filter(c => c.severity === 'Severe' && !c.referral);
+            const referredCases = cases.filter(c => c.referral);
+            const canRefer = !!(user.perms && ((user.perms.canRefer !== undefined) ? (user.perms.canRefer === true) : (user.perms.full === true)));
+
+            if (severeCases.length === 0) {
+                pendingBody.innerHTML = '<tr><td colspan="5">No pending severe cases found.</td></tr>';
+            } else {
+                severeCases.forEach(c => {
+                    const tr = document.createElement('tr');
+                    const actionCell = canRefer
+                        ? `<button class="btn btn-primary" style="padding: 5px 10px;" onclick="openReferral('${c.id}')">Refer</button>`
+                        : `<span class="text-muted">View Only</span>`;
+                    tr.innerHTML = `
+                        <td>${c.id}</td>
+                        <td>${c.name}</td>
+                        <td><span class="badge badge-severe">${c.severity}</span></td>
+                        <td>${c.condition || 'Not specified'}</td>
+                        <td>${actionCell}</td>
+                    `;
+                    pendingBody.appendChild(tr);
+                });
+            }
+
+            if (referredCases.length === 0) {
+                historyBody.innerHTML = '<tr><td colspan="5">No referral history.</td></tr>';
+            } else {
+                referredCases.forEach(c => {
+                    const r = c.referral;
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${new Date(r.date).toLocaleDateString()}</td>
+                        <td>${c.name}</td>
+                        <td>${r.partner}</td>
+                        <td>${r.reason}</td>
+                        <td><span class="badge badge-referred">Referred</span></td>
+                    `;
+                    historyBody.appendChild(tr);
+                });
+            }
+        }
+        
+
+        // --- Modal Logic ---
+        window.openReferral = (caseId) => {
+            const canRefer = !!(user.perms && ((user.perms.canRefer !== undefined) ? (user.perms.canRefer === true) : (user.perms.full === true)));
+            if (!canRefer) {
+                alert('Access Denied: You cannot generate referrals.');
+                return;
+            }
+            const client = cases.find(c => c.id === caseId);
+            document.getElementById('referral-case-id').value = caseId;
+            document.getElementById('referral-client-name').value = client.name;
+            document.getElementById('referral-modal').classList.remove('hidden');
+            document.getElementById('modal-backdrop').classList.remove('hidden');
+        };
+
+        window.closeModal = () => {
+            document.getElementById('referral-modal').classList.add('hidden');
+            document.getElementById('modal-backdrop').classList.add('hidden');
+            document.getElementById('referral-form').reset();
+        };
+
+        // --- Handle Submit ---
+        document.getElementById('referral-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const canRefer = !!(user.perms && ((user.perms.canRefer !== undefined) ? (user.perms.canRefer === true) : (user.perms.full === true)));
+            if (!canRefer) {
+                alert('Access Denied: You cannot generate referrals.');
+                closeModal();
+                return;
+            }
+            const caseId = document.getElementById('referral-case-id').value;
+            const client = cases.find(c => c.id === caseId);
+
+            const referralData = {
+                date: new Date().toISOString(),
+                partner: document.getElementById('referral-partner').value,
+                reason: document.getElementById('referral-reason').value,
+                urgency: document.getElementById('referral-urgency').value,
+                referredBy: user.username
+            };
+
+            // Update Case
+            client.referral = referralData;
+            client.status = 'Referred'; // Update main status
+            DB.saveCase(client);
+            
+            // Log
+            DB.addLog('Referral Generated', `Referred ${client.name} to ${referralData.partner} due to severe escalation.`);
+
+            alert(`Referral generated successfully for ${client.name}.`);
+            closeModal();
+            loadTables();
+        });
+
+    </script>
+</body>
+</html>

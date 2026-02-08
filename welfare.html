@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NICMS - Welfare & Support</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <nav id="sidebar" class="sidebar">
+            <!-- Populated by JS -->
+        </nav>
+        
+        <main class="main-content">
+            <header class="mb-20">
+                <h1>Caregiver Welfare Support</h1>
+                <p>Manage family support services and counseling.</p>
+            </header>
+
+            <div id="caregiver-view">
+                <div class="stat-card mb-20">
+                    <h3>Log Support Service</h3>
+                    <form id="support-form">
+                        <div class="form-group">
+                            <label>Select Client / Family</label>
+                            <select id="client-select" class="form-control" required>
+                                <!-- Populated by JS -->
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Service Type</label>
+                            <select id="service-type" class="form-control" required>
+                                <option value="Counseling">Individual Counseling</option>
+                                <option value="Family Training">Family Training Workshop</option>
+                                <option value="Peer Group">Peer Support Group</option>
+                                <option value="Respite Care">Respite Care Referral</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Notes / Outcomes</label>
+                            <textarea id="service-notes" class="form-control" rows="3" required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Log Service</button>
+                    </form>
+                </div>
+
+                <div class="table-responsive">
+                    <h3>Recent Support Logs</h3>
+                    <table id="support-logs-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Client</th>
+                                <th>Service</th>
+                                <th>Officer</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        const tmpUser = Auth.checkAuth();
+        if (!tmpUser) { /* redirected */ }
+        // Allow only Core Team or Scovia (even if supervisor). Others denied.
+        if (!(tmpUser.role === ROLES.CORE_TEAM || tmpUser.username === 'scovia' || tmpUser.role === ROLES.WELFARE)) {
+            alert("Access Denied: Welfare is restricted.");
+            Auth.redirectBasedOnRole();
+        }
+        UI.renderNav();
+        const user = Auth.getUser();
+        let cases = [];
+        let myCases = [];
+        (async function initWelfare() {
+        cases = await DB.fetchCases();
+        myCases = cases.filter(c => Auth.canAccessCounty(c.county));
+
+        // 1. Populate Client Dropdown
+        const clientSelect = document.getElementById('client-select');
+        myCases.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = `${c.name} (${c.id})`;
+            clientSelect.appendChild(opt);
+        });
+
+        // 2. Load Recent Logs (Mocking storage for this demo)
+        function loadLogs() {
+            const logs = JSON.parse(localStorage.getItem('nicms_welfare_logs') || '[]');
+            const tbody = document.querySelector('#support-logs-table tbody');
+            tbody.innerHTML = '';
+            
+            if (logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5">No support services logged yet.</td></tr>';
+            } else {
+                logs.forEach(l => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td>${new Date(l.date).toLocaleDateString()}</td><td>${l.clientName}</td><td>${l.service}</td><td>${l.officer}</td><td>${l.notes}</td>`;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+        loadLogs();
+
+        // 3. Handle Support Form Submit
+        document.getElementById('support-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const caseId = document.getElementById('client-select').value;
+            const client = myCases.find(c => c.id === caseId);
+            
+            const newLog = {
+                date: new Date().toISOString(),
+                caseId: caseId,
+                clientName: client.name,
+                service: document.getElementById('service-type').value,
+                notes: document.getElementById('service-notes').value,
+                officer: user.username
+            };
+
+            const logs = JSON.parse(localStorage.getItem('nicms_welfare_logs') || '[]');
+            logs.unshift(newLog);
+            localStorage.setItem('nicms_welfare_logs', JSON.stringify(logs));
+            
+            DB.addLog('Welfare Support', `Logged ${newLog.service} for ${client.name}`);
+            alert('Service logged successfully');
+            loadLogs();
+            document.getElementById('support-form').reset();
+        });
+        })();
+
+    </script>
+</body>
+</html>

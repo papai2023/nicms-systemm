@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NICMS - Client Onboarding</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <nav id="sidebar" class="sidebar">
+            <!-- Populated by JS -->
+        </nav>
+        
+        <main class="main-content">
+            <header class="mb-20">
+                <h1>Client Onboarding</h1>
+                <p>Register a new client into the system.</p>
+            </header>
+
+            <div id="alert-box"></div>
+
+            <div class="stat-card">
+                <form id="onboarding-form">
+                    <div class="form-group">
+                        <h3>Client Biodata</h3>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div>
+                                <label for="firstName">First Name</label>
+                                <input type="text" id="firstName" class="form-control" required>
+                            </div>
+                            <div>
+                                <label for="lastName">Last Name</label>
+                                <input type="text" id="lastName" class="form-control" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;">
+                            <div>
+                                <label for="dob">Date of Birth</label>
+                                <input type="date" id="dob" class="form-control" required>
+                            </div>
+                            <div>
+                                <label for="gender">Gender</label>
+                                <select id="gender" class="form-control" required>
+                                    <option value="">Select...</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="county">County</label>
+                                <select id="county" class="form-control" required>
+                                    <!-- Populated by JS -->
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="location">Specific Location / Village</label>
+                        <input type="text" id="location" class="form-control" placeholder="e.g., Westlands, Nairobi" required>
+                    </div>
+
+                    <hr class="mb-20 mt-20" style="border: 0; border-top: 1px solid #eee;">
+
+                    <div class="form-group">
+                        <h3>Referral Information</h3>
+                        <label for="referralSource">Referral Source</label>
+                        <select id="referralSource" class="form-control" required>
+                            <option value="School">School</option>
+                            <option value="Health Facility">Health Facility</option>
+                            <option value="Community Leader">Community Leader</option>
+                            <option value="Self Referral">Self Referral</option>
+                            <option value="NGO Partner">NGO Partner</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="concerns">Initial Presenting Concerns</label>
+                        <textarea id="concerns" class="form-control" rows="4" placeholder="Describe the main reasons for referral..." required></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-primary">Register Client</button>
+                    </div>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        Auth.enforceRole([ROLES.CORE_TEAM, ROLES.SUPERVISOR]);
+        UI.renderNav();
+
+        const user = Auth.getUser();
+        const countySelect = document.getElementById('county');
+
+        // Populate Counties
+        if (user.role === ROLES.CORE_TEAM || user.county === 'All') {
+            COUNTIES.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.textContent = c;
+                countySelect.appendChild(opt);
+            });
+        } else if (Array.isArray(user.accessibleCounties)) {
+            user.accessibleCounties.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.textContent = c;
+                countySelect.appendChild(opt);
+            });
+        } else {
+            const opt = document.createElement('option');
+            opt.value = user.county;
+            opt.textContent = user.county;
+            countySelect.appendChild(opt);
+            countySelect.disabled = true;
+        }
+
+        document.getElementById('onboarding-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const newCase = {
+                id: Logic.generateId(),
+                name: document.getElementById('firstName').value + ' ' + document.getElementById('lastName').value,
+                dob: document.getElementById('dob').value,
+                gender: document.getElementById('gender').value,
+                county: (user.role === ROLES.CORE_TEAM || user.county === 'All' || Array.isArray(user.accessibleCounties)) ? countySelect.value : user.county,
+                location: document.getElementById('location').value,
+                referralSource: document.getElementById('referralSource').value,
+                concerns: document.getElementById('concerns').value,
+                status: 'Assessment', // Moves to Assessment stage
+                severity: null,
+                registrationDate: new Date().toISOString(),
+                registrationTime12: new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }),
+                registeredBy: user.username
+            };
+
+            DB.saveCase(newCase);
+            DB.addLog('Client Registration', `Registered client ${newCase.name} (${newCase.id})`);
+            
+            const whenTime = newCase.registrationTime12;
+            UI.showAlert(`Client registered successfully at ${whenTime}. Case ID: ${newCase.id}`);
+            document.getElementById('onboarding-form').reset();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NICMS - Follow-up Tracking</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <nav id="sidebar" class="sidebar">
+            <!-- Populated by JS -->
+        </nav>
+        
+        <main class="main-content">
+            <header class="mb-20">
+                <h1>Follow-up Tracking</h1>
+                <p>Track client progress and record outcome feedback.</p>
+            </header>
+
+            <div id="followup-view">
+                <div class="table-responsive">
+                    <h3>Clients Due for Follow-up</h3>
+                    <table id="followup-table">
+                        <thead>
+                            <tr>
+                                <th>Case ID</th>
+                                <th>Referred Facility</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Follow-up Modal -->
+            <div id="followup-modal" class="stat-card mt-20 hidden" style="border: 2px solid var(--warning-color);">
+                <h3>Record Follow-up for <span id="followup-client-name"></span></h3>
+                <form id="followup-form">
+                    <input type="hidden" id="followup-case-id">
+                    <div class="form-group">
+                        <label>Communication Method</label>
+                        <select id="followup-method" class="form-control">
+                            <option value="Phone Call">Phone Call</option>
+                            <option value="Home Visit">Home Visit</option>
+                            <option value="Clinic Visit">Clinic Visit</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Client Status / Feedback</label>
+                        <textarea id="followup-notes" class="form-control" rows="3" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-success">Save Feedback</button>
+                        <button type="button" class="btn btn-danger" onclick="document.getElementById('followup-modal').classList.add('hidden')">Cancel</button>
+                    </div>
+                </form>
+            </div>
+
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        Auth.enforceRole([ROLES.CORE_TEAM, ROLES.SUPERVISOR, ROLES.FOLLOWUP]);
+        UI.renderNav();
+        const user = Auth.getUser();
+        let cases = [];
+        let myCases = [];
+        (async function initFollowup() {
+            cases = await DB.fetchCases();
+            myCases = cases.filter(c => Auth.canAccessCounty(c.county));
+
+        // 1. Load Follow-up List
+        function loadFollowups() {
+            const tbody = document.querySelector('#followup-table tbody');
+            const theadTr = document.querySelector('#followup-table thead tr');
+
+            tbody.innerHTML = '';
+            
+            // Reconstruct header based on view
+            // Default: Case ID, Client Name, Last Contact, Status, Action
+            // Extended: Case ID, Client Name, Last Contact, Status, Referred To, Action
+            
+            let headerHTML = `
+                <th>Case ID</th>
+                <th>Client Name</th>
+                <th>Last Contact</th>
+                <th>Status</th>
+            `;
+            
+            if (user.extendedReferralView) {
+                headerHTML += `<th>Referred Facility</th>`;
+            }
+            
+            headerHTML += `<th>Action</th>`;
+            theadTr.innerHTML = headerHTML;
+
+            if (myCases.length === 0) {
+                const colSpan = user.extendedReferralView ? 6 : 5;
+                tbody.innerHTML = `<tr><td colspan="${colSpan}">No clients found for your county.</td></tr>`;
+            } else {
+                myCases.forEach(c => {
+                    const tr = document.createElement('tr');
+                    
+                    const referralInfo = c.referral && c.referral.partner ? c.referral.partner : '-';
+                    const referralCell = user.extendedReferralView ? `<td>${referralInfo}</td>` : '';
+                    
+                    tr.innerHTML = `
+                        <td>${c.id}</td>
+                        <td>${c.name}</td>
+                        <td>${c.lastContact ? new Date(c.lastContact).toLocaleDateString() : 'None'}</td>
+                        <td>${c.status}</td>
+                        ${referralCell}
+                        <td><button class="btn btn-primary" style="padding:5px;" onclick="openFollowup('${c.id}')">Log Feedback</button></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+        loadFollowups();
+
+        // 2. Follow-up Logic
+        window.openFollowup = (caseId) => {
+            // No restriction for extended view users
+            const client = myCases.find(c => c.id === caseId);
+            document.getElementById('followup-client-name').textContent = client.name;
+            document.getElementById('followup-case-id').value = caseId;
+            document.getElementById('followup-modal').classList.remove('hidden');
+            document.getElementById('followup-modal').scrollIntoView();
+        };
+
+        document.getElementById('followup-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const caseId = document.getElementById('followup-case-id').value;
+            const client = cases.find(c => c.id === caseId); // Get ref from main DB array
+
+            client.lastContact = new Date().toISOString();
+            const note = document.getElementById('followup-notes').value;
+            const method = document.getElementById('followup-method').value;
+
+            // Save note to session history or a new field? Let's append to sessions for now or logs
+            if(!client.followupNotes) client.followupNotes = [];
+            client.followupNotes.push({ date: new Date().toISOString(), method, note, officer: user.username });
+
+            DB.saveCase(client);
+            DB.addLog('Follow-up', `Contacted ${client.name} via ${method}`);
+            
+            alert('Follow-up recorded!');
+            document.getElementById('followup-modal').classList.add('hidden');
+            document.getElementById('followup-form').reset();
+            loadFollowups();
+        });
+        })();
+
+    </script>
+</body>
+</html>

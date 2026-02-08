@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NICMS - Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <nav id="sidebar" class="sidebar">
+            <!-- Populated by JS -->
+        </nav>
+        
+        <main class="main-content">
+            <header class="mb-20">
+                <h1>Dashboard</h1>
+                <p>Welcome back, <span id="user-name">User</span></p>
+            </header>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Total Active Cases</div>
+                    <div class="stat-value" id="stat-total">0</div>
+                    <small>In your catchment area</small>
+                </div>
+                <div class="stat-card warning">
+                    <div class="stat-label">Pending Assessments</div>
+                    <div class="stat-value" id="stat-pending">0</div>
+                    <small>Requires immediate attention</small>
+                </div>
+                <div class="stat-card danger">
+                    <div class="stat-label">High Severity Cases</div>
+                    <div class="stat-value" id="stat-severe">0</div>
+                    <small>Escalation candidates</small>
+                </div>
+                <div class="stat-card success">
+                    <div class="stat-label">Interventions Logged</div>
+                    <div class="stat-value" id="stat-interventions">0</div>
+                    <small>This month</small>
+                </div>
+            </div>
+
+            <div class="mb-20">
+                <h3>Recent Cases</h3>
+                <div class="table-responsive">
+                    <table id="recent-cases-table">
+                        <thead>
+                            <tr>
+                                <th>Case ID</th>
+                                <th>Client Name</th>
+                                <th>County</th>
+                                <th>Status</th>
+                                <th>Severity</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="quick-actions" class="mb-20">
+                <h3>Quick Actions</h3>
+                <div style="display: flex; gap: 10px;">
+                    <a href="onboarding.html" class="btn btn-primary">Register New Client</a>
+                    <a href="reports.html" class="btn btn-success">Generate Weekly Report</a>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        // Init
+        Auth.enforceRole([ROLES.CORE_TEAM, ROLES.SUPERVISOR]);
+        UI.renderNav();
+        document.getElementById('user-name').textContent = Auth.getUser().name;
+
+        // Load Data
+        async function loadDashboard() {
+            const allCases = await DB.fetchCases();
+            const user = Auth.getUser();
+
+            // Filter by RBAC & Geography
+            const myCases = allCases.filter(c => Auth.canAccessCounty(c.county));
+
+            // Calculate Stats
+            const total = myCases.length;
+            const pending = myCases.filter(c => c.status === 'Identification' || c.status === 'Assessment').length;
+            const severe = myCases.filter(c => c.severity === 'Severe').length;
+            // Intervention count (from backend logs)
+            const logs = await DB.fetchLogs();
+            const interventions = logs ? logs.filter(l => l.action === 'Intervention Logged').length : 0;
+
+            document.getElementById('stat-total').textContent = total;
+            document.getElementById('stat-pending').textContent = pending;
+            document.getElementById('stat-severe').textContent = severe;
+            document.getElementById('stat-interventions').textContent = interventions;
+
+            // Render Table
+            const tbody = document.querySelector('#recent-cases-table tbody');
+            tbody.innerHTML = '';
+            
+            if (myCases.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No cases found. Start by onboarding a client.</td></tr>';
+            } else {
+                // Show last 5
+                myCases.slice(-5).reverse().forEach(c => {
+                    const tr = document.createElement('tr');
+                    let badgeClass = 'badge-new';
+                    if(c.severity === 'Mild') badgeClass = 'badge-mild';
+                    if(c.severity === 'Moderate') badgeClass = 'badge-moderate';
+                    if(c.severity === 'Severe') badgeClass = 'badge-severe';
+
+                    const isSevereReferral = (c.severity === 'Severe' && c.referral);
+                    const actionCell = isSevereReferral
+                        ? `<button class="btn btn-primary" style="padding: 5px 10px; font-size: 0.8rem;" onclick="openReferralReport('${c.id}')">View</button>`
+                        : `<a href="assessment.html?id=${c.id}" class="btn btn-primary" style="padding: 5px 10px; font-size: 0.8rem;">View</a>`;
+                    tr.innerHTML = `
+                        <td>${c.id}</td>
+                        <td>${c.name}</td>
+                        <td>${c.county}</td>
+                        <td>${c.status}</td>
+                        <td><span class="badge ${badgeClass}">${c.severity || 'N/A'}</span></td>
+                        <td>${actionCell}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+
+        loadDashboard();
+        
+        window.openReferralReport = async (caseId) => {
+            const cases = await DB.fetchCases();
+            const user = Auth.getUser();
+            const client = cases.find(c => c.id === caseId);
+            if (!client || !client.referral) {
+                window.location.href = 'assessment.html?id=' + caseId;
+                return;
+            }
+            const isFollowup = (user.role === ROLES.FOLLOWUP || user.username === 'followup_ref');
+            const isRefOfficer = (client.referral.referredBy && client.referral.referredBy === user.username);
+            const modalId = 'referral-report-modal';
+            const backdropId = 'referral-report-backdrop';
+            if (!document.getElementById(modalId)) {
+                const html = `
+                <div id="${modalId}" class="stat-card mt-20 hidden" style="position: fixed; top: 15%; left: 50%; transform: translate(-50%, 0); width: 55%; z-index: 1000; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 2px solid var(--primary-color);">
+                    <h3>Referral Report</h3>
+                    <div class="table-responsive">
+                        <table style="width:100%;">
+                            <tbody id="referral-report-body"></tbody>
+                        </table>
+                    </div>
+                    <div style="text-align:right; margin-top: 15px;">
+                        <button class="btn btn-secondary" onclick="document.getElementById('${modalId}').classList.add('hidden'); document.getElementById('${backdropId}').classList.add('hidden');">Close</button>
+                    </div>
+                </div>
+                <div id="${backdropId}" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999;"></div>
+                `;
+                document.body.insertAdjacentHTML('beforeend', html);
+            }
+            const body = document.getElementById('referral-report-body');
+            const rows = [];
+            rows.push(`<tr><td style="width:35%;"><b>Case ID</b></td><td>${client.id}</td></tr>`);
+            rows.push(`<tr><td><b>Client Name</b></td><td>${client.name}</td></tr>`);
+            rows.push(`<tr><td><b>Severity</b></td><td>${client.severity || 'N/A'}</td></tr>`);
+            if (isFollowup || isRefOfficer) {
+                rows.push(`<tr><td><b>Condition</b></td><td>${client.condition || 'Not specified'}</td></tr>`);
+                rows.push(`<tr><td><b>Referred Facility</b></td><td>${client.referral.partner}</td></tr>`);
+                rows.push(`<tr><td><b>Referral Time</b></td><td>${new Date(client.referral.date).toLocaleString()}</td></tr>`);
+                rows.push(`<tr><td><b>Reason</b></td><td>${client.referral.reason}</td></tr>`);
+            } else {
+                rows.push(`<tr><td><b>Referred Facility</b></td><td>${client.referral.partner}</td></tr>`);
+                rows.push(`<tr><td><b>Referral Time</b></td><td>${new Date(client.referral.date).toLocaleString()}</td></tr>`);
+                rows.push(`<tr><td><b>Referred By</b></td><td>${client.referral.referredBy || '-'}</td></tr>`);
+                rows.push(`<tr><td><b>Urgency</b></td><td>${client.referral.urgency || '-'}</td></tr>`);
+                rows.push(`<tr><td><b>Summary</b></td><td>${client.condition || client.concerns || 'No summary available'}</td></tr>`);
+            }
+            body.innerHTML = rows.join('');
+            document.getElementById(modalId).classList.remove('hidden');
+            document.getElementById(backdropId).classList.remove('hidden');
+        };
+    </script>
+</body>
+</html>

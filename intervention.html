@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NICMS - Intervention</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <nav id="sidebar" class="sidebar">
+            <!-- Populated by JS -->
+        </nav>
+        
+        <main class="main-content">
+            <header class="mb-20">
+                <h1>Intervention Management</h1>
+                <p>Track therapy sessions and case progress.</p>
+            </header>
+
+            <div id="case-list-view">
+                <div class="table-responsive">
+                    <h3>Active Intervention Cases</h3>
+                    <table id="intervention-table">
+                        <thead>
+                            <tr>
+                                <th>Case ID</th>
+                                <th>Client</th>
+                                <th>Severity</th>
+                                <th>Classification</th>
+                                <th>Last Session</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="intervention-form-view" class="hidden">
+                <button onclick="window.location.href='intervention.html'" class="btn btn-secondary mb-20">&larr; Back to List</button>
+                
+                <div class="stat-card mb-20">
+                    <h3>Case: <span id="case-id-display"></span></h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div>
+                            <p><strong>Name:</strong> <span id="client-name-display"></span></p>
+                            <p><strong>Severity:</strong> <span id="client-severity-display"></span></p>
+                        </div>
+                        <div>
+                            <p><strong>Classification:</strong> <span id="client-class-display"></span></p>
+                            <p><strong>Assessment Notes:</strong> <span id="client-notes-display"></span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <h3>Log New Session</h3>
+                    <form id="session-form">
+                        <div class="form-group">
+                            <label>Intervention Type</label>
+                            <select id="session-type" class="form-control" required>
+                                <option value="Individual Therapy">Individual Therapy</option>
+                                <option value="Group Therapy">Group Therapy</option>
+                                <option value="Parent Counseling">Parent Counseling</option>
+                                <option value="Medical Follow-up">Medical Follow-up</option>
+                                <option value="Home Visit">Home Visit</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Session Notes & Observations</label>
+                            <textarea id="session-notes" class="form-control" rows="4" required></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Progress Indicator</label>
+                            <select id="progress" class="form-control" required>
+                                <option value="Improving">Improving</option>
+                                <option value="Stable">Stable</option>
+                                <option value="Regressing">Regressing</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="close-case"> Mark Case as Completed / Closed
+                            </label>
+                        </div>
+
+                        <button type="submit" class="btn btn-success">Log Session</button>
+                    </form>
+                </div>
+
+                <div class="mt-20">
+                    <h3>Session History</h3>
+                    <div class="table-responsive">
+                        <table id="history-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Type</th>
+                                    <th>Officer</th>
+                                    <th>Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        Auth.enforceRole([ROLES.CORE_TEAM, ROLES.SUPERVISOR, ROLES.INTERVENOR]);
+        UI.renderNav();
+        const user = Auth.getUser();
+        const urlParams = new URLSearchParams(window.location.search);
+        const caseId = urlParams.get('id');
+        (async function start() {
+
+        if (caseId) {
+            // Detail View
+            document.getElementById('case-list-view').classList.add('hidden');
+            document.getElementById('intervention-form-view').classList.remove('hidden');
+
+            const cases = await DB.fetchCases();
+            const currentCase = cases.find(c => c.id === caseId);
+
+            if (!currentCase) {
+                alert("Case not found");
+                window.location.href = 'intervention.html';
+            }
+
+            document.getElementById('case-id-display').textContent = currentCase.id;
+            document.getElementById('client-name-display').textContent = currentCase.name;
+            document.getElementById('client-severity-display').textContent = currentCase.severity;
+            document.getElementById('client-class-display').textContent = currentCase.classification;
+            document.getElementById('client-notes-display').textContent = currentCase.assessmentNotes || 'N/A';
+
+            // Load History
+            const historyBody = document.querySelector('#history-table tbody');
+            if (currentCase.sessions) {
+                currentCase.sessions.forEach(s => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td>${new Date(s.date).toLocaleDateString()}</td><td>${s.type}</td><td>${s.officer}</td><td>${s.notes}</td>`;
+                    historyBody.appendChild(tr);
+                });
+            } else {
+                historyBody.innerHTML = '<tr><td colspan="4">No sessions logged yet.</td></tr>';
+            }
+
+            document.getElementById('session-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                
+                const session = {
+                    date: new Date().toISOString(),
+                    type: document.getElementById('session-type').value,
+                    notes: document.getElementById('session-notes').value,
+                    progress: document.getElementById('progress').value,
+                    officer: user.username
+                };
+
+                if (!currentCase.sessions) currentCase.sessions = [];
+                currentCase.sessions.unshift(session);
+
+                if (document.getElementById('close-case').checked) {
+                    currentCase.status = 'Closed';
+                    DB.addLog('Case Closed', `Case ${currentCase.id} closed by ${user.username}`);
+                }
+
+                DB.saveCase(currentCase);
+                DB.addLog('Intervention Logged', `Session for ${currentCase.id}`);
+                
+                alert('Session logged successfully.');
+                location.reload();
+            });
+
+        } else {
+            // List View
+            const tbody = document.querySelector('#intervention-table tbody');
+            const allCases = await DB.fetchCases();
+            
+            const activeCases = allCases.filter(c => {
+                const isIntervention = (c.status === 'Intervention' || c.status === 'Escalated');
+                const canAccess = Auth.canAccessCounty(c.county);
+                return isIntervention && canAccess;
+            });
+
+            if (activeCases.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No active intervention cases.</td></tr>';
+            } else {
+                activeCases.forEach(c => {
+                    const lastSession = c.sessions && c.sessions.length > 0 ? new Date(c.sessions[0].date).toLocaleDateString() : 'Never';
+                    
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${c.id}</td>
+                        <td>${c.name}</td>
+                        <td><span class="badge ${c.severity === 'Severe' ? 'badge-severe' : 'badge-moderate'}">${c.severity}</span></td>
+                        <td>${c.classification || '-'}</td>
+                        <td>${lastSession}</td>
+                        <td><a href="intervention.html?id=${c.id}" class="btn btn-success" style="padding: 5px 10px;">Log Session</a></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+        })();
+    </script>
+</body>
+</html>

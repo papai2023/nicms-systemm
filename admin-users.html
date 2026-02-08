@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NICMS - User Admin</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <nav id="sidebar" class="sidebar"></nav>
+        <main class="main-content">
+            <header class="mb-20">
+                <h1>User Administration</h1>
+                <p>Edit user profiles stored in localStorage.</p>
+            </header>
+            <div id="alert-box"></div>
+            
+            <div class="stat-card mb-20">
+                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 20px;">
+                    <div>
+                        <label>Select User</label>
+                        <select id="user-select" class="form-control"></select>
+                        <button id="load-user" class="btn btn-primary mt-20">Load Profile</button>
+                    </div>
+                    <div>
+                        <h3>Profile</h3>
+                        <form id="profile-form">
+                            <div class="form-group">
+                                <label>Username</label>
+                                <input type="text" id="pf-username" class="form-control" disabled>
+                            </div>
+                            <div class="form-group">
+                                <label>Display Name</label>
+                                <input type="text" id="pf-name" class="form-control" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Role</label>
+                                <input type="text" id="pf-role" class="form-control" disabled>
+                            </div>
+                            <div class="form-group">
+                                <label>Single County</label>
+                                <input type="text" id="pf-county" class="form-control" placeholder="e.g., Nairobi">
+                            </div>
+                            <div class="form-group">
+                                <label>Accessible Counties (comma-separated)</label>
+                                <input type="text" id="pf-access" class="form-control" placeholder="e.g., Bungoma, Trans Nzoia">
+                            </div>
+                            <div class="form-group">
+                                <label><input type="checkbox" id="pf-extended"> Extended Referral View</label>
+                            </div>
+                            <div class="form-group">
+                                <label><input type="checkbox" id="pf-name-locked"> Name Locked</label>
+                            </div>
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-success">Save Profile</button>
+                                <button type="button" id="reset-pwd" class="btn btn-danger">Reset Password</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script src="app.js"></script>
+    <script>
+        Auth.enforceRole([ROLES.CORE_TEAM]);
+        UI.renderNav();
+        const current = Auth.getUser();
+        if (!(current.perms && (current.perms.adminUsers || current.perms.full))) {
+            alert('Access Denied: You do not have permission to manage users.');
+            window.location.href = 'dashboard.html';
+        }
+        
+        const restrictedResetUsers = ['susannah', 'pascalia', 'simon'];
+        if (restrictedResetUsers.includes(current.username)) {
+            document.getElementById('reset-pwd').style.display = 'none';
+        }
+        
+        const userSelect = document.getElementById('user-select');
+        let users = [];
+        (async function initAdminUsers() {
+        users = await DB.fetchUsers();
+        users.forEach(u => {
+            const opt = document.createElement('option');
+            opt.value = u.username;
+            opt.textContent = `${u.name} (${u.username})`;
+            userSelect.appendChild(opt);
+        });
+        
+        document.getElementById('load-user').addEventListener('click', () => {
+            const uname = userSelect.value;
+            const u = users.find(x => x.username === uname);
+            if (!u) return;
+            document.getElementById('pf-username').value = u.username;
+            document.getElementById('pf-name').value = u.name || '';
+            document.getElementById('pf-role').value = u.role;
+            document.getElementById('pf-county').value = u.county || '';
+            document.getElementById('pf-access').value = Array.isArray(u.accessibleCounties) ? u.accessibleCounties.join(', ') : '';
+            document.getElementById('pf-extended').checked = !!u.extendedReferralView;
+            document.getElementById('pf-name-locked').checked = !!u.nameLocked;
+        });
+        
+        document.getElementById('profile-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const uname = document.getElementById('pf-username').value;
+            // Use local cached array first, fallback to localStorage
+            let u = users.find(x => x.username === uname) || DB.getUsers().find(x => x.username === uname);
+            if (!u) return;
+            u.name = document.getElementById('pf-name').value;
+            u.extendedReferralView = document.getElementById('pf-extended').checked;
+            u.nameLocked = document.getElementById('pf-name-locked').checked;
+            
+            const single = document.getElementById('pf-county').value.trim();
+            const multi = document.getElementById('pf-access').value.trim();
+            if (multi) {
+                u.accessibleCounties = multi.split(',').map(s => s.trim()).filter(Boolean);
+                delete u.county;
+            } else {
+                u.county = single || u.county || '';
+                delete u.accessibleCounties;
+            }
+            
+            DB.updateUser(u);
+            localStorage.setItem('nicms_user', JSON.stringify(Auth.getUser()?.username === u.username ? u : Auth.getUser()));
+            DB.addLog('Admin: Update User', `Updated profile for ${u.username}`);
+            UI.showAlert('Profile saved', 'success');
+        });
+        })();
+        
+        document.getElementById('reset-pwd').addEventListener('click', () => {
+            const uname = document.getElementById('pf-username').value;
+            let u = DB.getUsers().find(x => x.username === uname);
+            if (!u) return;
+            const tmp = prompt('Enter temporary password');
+            if (!tmp || tmp.length < 8) return UI.showAlert('Password must be at least 8 characters', 'error');
+            const salt = u.passwordSalt || `nicms:${u.username}`;
+            u.passwordHash = simpleHash(salt + tmp);
+            DB.updateUser(u);
+            DB.addLog('Admin: Reset Password', `Password reset for ${u.username}`);
+            UI.showAlert('Password reset', 'success');
+        });
+    </script>
+</body>
+</html>

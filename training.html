@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NICMS - Staff Training</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <nav id="sidebar" class="sidebar">
+            <!-- Populated by JS -->
+        </nav>
+        
+        <main class="main-content">
+            <header class="mb-20">
+                <h1>Staff Training & Capacity Building</h1>
+                <p>Track workforce readiness and certifications.</p>
+            </header>
+
+            <div class="stat-card mb-20">
+                <h3>My Training Progress</h3>
+                <div style="display: flex; gap: 20px; align-items: center; margin-top: 20px;">
+                    <div style="flex: 1; text-align: center;">
+                        <div class="stat-value" id="tp-completed">0</div>
+                        <div class="stat-label">Courses Completed</div>
+                    </div>
+                    <div style="flex: 1; text-align: center;">
+                        <div class="stat-value" id="tp-pending">0</div>
+                        <div class="stat-label">Pending Mandatory</div>
+                    </div>
+                    <div style="flex: 1; text-align: center;">
+                        <div class="stat-value" id="tp-compliance">0%</div>
+                        <div class="stat-label">Compliance Score</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <h3>Training Catalog (Published by Steve or Maxwel)</h3>
+                <table id="training-table">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Topic</th>
+                            <th>Duration</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <div class="stat-card mt-20">
+                <h3>Upload External Certification</h3>
+                <form id="ext-cert-form">
+                    <div class="form-group">
+                        <label>Course Name</label>
+                        <input type="text" id="ec-name" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Completion Date</label>
+                        <input type="date" id="ec-date" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Upload File (PDF/JPG)</label>
+                        <input type="file" id="ec-file" class="form-control" accept="application/pdf,image/jpeg,image/png" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Submit for Approval</button>
+                </form>
+            </div>
+
+            <div class="stat-card mt-20">
+                <h3>My External Certifications</h3>
+                <div class="table-responsive">
+                    <table id="my-certs-table">
+                        <thead>
+                            <tr>
+                                <th>Course</th>
+                                <th>Date</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="stat-card mt-20" id="admin-cert-review" style="display:none;">
+                <h3>Admin: Review External Certifications</h3>
+                <div class="table-responsive">
+                    <table id="admin-certs-table">
+                        <thead>
+                            <tr>
+                                <th>Officer</th>
+                                <th>Course</th>
+                                <th>Date</th>
+                                <th>File</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="stat-card mt-20" id="admin-training-materials" style="display:none;">
+                <h3>Admin: Upload Training Materials</h3>
+                <form id="training-upload-form">
+                    <div class="form-group">
+                        <label>Title</label>
+                        <input type="text" id="tm-title" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea id="tm-desc" class="form-control" rows="3" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Upload PDF</label>
+                        <input type="file" id="tm-pdf" class="form-control" accept="application/pdf" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Topic</label>
+                        <input type="text" id="tm-topic" class="form-control" placeholder="e.g., Clinical, Compliance">
+                    </div>
+                    <div class="form-group">
+                        <label>Duration</label>
+                        <input type="text" id="tm-duration" class="form-control" placeholder="e.g., 4 Hours, 1 Day">
+                    </div>
+                    <div class="form-group">
+                        <label>Type</label>
+                        <select id="tm-type" class="form-control">
+                            <option value="Mandatory">Mandatory</option>
+                            <option value="Optional">Optional</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label><input type="checkbox" id="tm-require-pdf"> Require PDF submission</label>
+                    </div>
+                    <button type="submit" class="btn btn-success">Publish Material</button>
+                </form>
+            </div>
+            
+            <div class="stat-card mt-20" id="admin-progress-panel" style="display:none;">
+                <h3>Admin: Update Officer Progress (Maxwel Only)</h3>
+                <div class="form-group">
+                    <label>Select Officer</label>
+                    <select id="progress-officer" class="form-control"></select>
+                </div>
+                <div class="table-responsive">
+                    <table id="progress-materials-table">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Type</th>
+                                <th>Requires PDF</th>
+                                <th>Completed</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="form-group" style="text-align:right;">
+                    <button id="save-progress" class="btn btn-success">Save Progress</button>
+                </div>
+            </div>
+            
+            <div class="stat-card mt-20">
+                <h3>Available Training Materials</h3>
+                <div id="materials-list"></div>
+            </div>
+            
+            <div id="upload-modal" class="stat-card mt-20 hidden" style="position: fixed; top: 20%; left: 50%; transform: translate(-50%, 0); width: 50%; z-index: 1000; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 2px solid var(--warning-color);">
+                <h3>Upload PDF Submission</h3>
+                <form id="pdf-upload-form">
+                    <input type="hidden" id="upload-material-id">
+                    <div class="form-group">
+                        <label>Select PDF</label>
+                        <input type="file" id="upload-file" class="form-control" accept="application/pdf" required>
+                    </div>
+                    <div class="form-group" style="text-align: right;">
+                        <button type="button" class="btn btn-danger" onclick="closeUpload()">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Submit</button>
+                    </div>
+                </form>
+            </div>
+            
+            <div class="stat-card mt-20" id="admin-submissions" style="display:none;">
+                <h3>Admin: Received Training Submissions</h3>
+                <div class="table-responsive">
+                    <table id="submissions-table">
+                        <thead>
+                            <tr>
+                                <th>Officer</th>
+                                <th>Material</th>
+                                <th>File</th>
+                                <th>Date</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        Auth.checkAuth();
+        UI.renderNav();
+        const u = Auth.getUser();
+        const canAdminMaterials = (u.username === 'steve.wafula' || u.username === 'maxwel');
+        if (canAdminMaterials) document.getElementById('admin-training-materials').style.display = 'block';
+        const canAdminProgress = u.username === 'maxwel';
+        if (canAdminProgress) document.getElementById('admin-progress-panel').style.display = 'block';
+        const canReceiveSubmissions = (u.username === 'maxwel');
+        if (canReceiveSubmissions) document.getElementById('admin-submissions').style.display = 'block';
+        
+        async function loadMaterials() {
+            const materials = await DB.fetchTrainingMaterials();
+            const container = document.getElementById('materials-list');
+            if (materials.length === 0) {
+                container.innerHTML = '<p>No materials published yet.</p>';
+            } else {
+                container.innerHTML = materials.map(m => `
+                    <div class="stat-card mb-20">
+                        <h4>${m.title}</h4>
+                        <p>${m.desc}</p>
+                        ${m.pdfData ? `<p><button class="btn btn-secondary" onclick="downloadMaterial('${m.id}')">Download PDF</button></p>` : ''}
+                        <small>Published by ${m.by} on ${new Date(m.date).toLocaleString()}</small>
+                    </div>
+                `).join('');
+            }
+        }
+        loadMaterials();
+        
+        const form = document.getElementById('training-upload-form');
+        if (form) {
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const title = document.getElementById('tm-title').value.trim();
+                const desc = document.getElementById('tm-desc').value.trim();
+                const topic = document.getElementById('tm-topic').value.trim();
+                const duration = document.getElementById('tm-duration').value.trim();
+                const type = document.getElementById('tm-type').value;
+                const requirePdf = document.getElementById('tm-require-pdf').checked;
+                const file = document.getElementById('tm-pdf').files[0];
+                if (!file || file.type !== 'application/pdf') {
+                    UI.showAlert('Please upload a PDF file', 'error');
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = async () => {
+                    const base64 = reader.result.split(',')[1];
+                    const m = {
+                        id: 'TM-' + Math.random().toString(36).slice(2, 8),
+                        title, desc, topic, duration, type, requirePdf,
+                        by: u.username, date: new Date().toISOString(),
+                        pdfName: file.name, pdfSize: file.size, pdfData: base64
+                    };
+                    await DB.saveTrainingMaterial(m);
+                    DB.addLog('Admin: Publish Training', `Published training material "${title}" (PDF)`);
+                    document.getElementById('training-upload-form').reset();
+                    loadMaterials();
+                    loadCatalog();
+                    UI.showAlert('Training material (PDF) published', 'success');
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+        
+        async function loadCatalog() {
+            const materials = await DB.fetchTrainingMaterials();
+            const publishers = new Set(['steve.wafula', 'maxwel']);
+            const filtered = materials.filter(m => publishers.has(m.by));
+            const submissions = await DB.fetchTrainingSubmissions();
+            const tbody = document.querySelector('#training-table tbody');
+            tbody.innerHTML = '';
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6">No training modules published by Steve or Maxwel yet.</td></tr>';
+                return;
+            }
+            filtered.forEach(m => {
+                const mine = submissions.find(s => s.materialId === m.id && s.by === u.username);
+                const status = m.requirePdf ? (mine ? 'Submitted' : 'Required') : 'Available';
+                const typeBadge = m.type === 'Mandatory' ? '<span class="badge badge-severe">Mandatory</span>' : '<span class="badge badge-new">Optional</span>';
+                const actionCell = (() => {
+                    const actions = [];
+                    if (m.pdfData) {
+                        actions.push(`<button class="btn btn-secondary" onclick="downloadMaterial('${m.id}')">Download PDF</button>`);
+                    }
+                    if (m.requirePdf && !mine) {
+                        actions.push(`<button class="btn btn-primary" onclick="openUpload('${m.id}')">Upload PDF</button>`);
+                    }
+                    if (mine) {
+                        actions.push(`<button class="btn btn-secondary" onclick="viewSubmission('${mine.id}')">View Submission</button>`);
+                    }
+                    return actions.length ? actions.join(' ') : '<span class="text-muted">No action</span>';
+                })();
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${m.title}</td>
+                    <td>${m.topic || '-'}</td>
+                    <td>${m.duration || '-'}</td>
+                    <td>${typeBadge}</td>
+                    <td>${status}</td>
+                    <td>${actionCell}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // --- External Certification Logic ---
+        
+        // Check permissions for Cert Review
+        const canReviewCerts = (u.username === 'maxwel' || u.username === 'susannah');
+        if (canReviewCerts) document.getElementById('admin-cert-review').style.display = 'block';
+
+        // Handle Upload
+        const extCertForm = document.getElementById('ext-cert-form');
+        if (extCertForm) {
+            extCertForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const name = document.getElementById('ec-name').value;
+                const date = document.getElementById('ec-date').value;
+                const file = document.getElementById('ec-file').files[0];
+                
+                if (!file) return UI.showAlert('File required', 'error');
+
+                const reader = new FileReader();
+                reader.onload = async () => {
+                    const base64 = reader.result.split(',')[1];
+                    const cert = {
+                        id: 'EC-' + Math.random().toString(36).slice(2, 8),
+                        courseName: name,
+                        completionDate: date,
+                        fileData: base64,
+                        fileName: file.name,
+                        fileType: file.type,
+                        uploadedBy: u.username,
+                        uploadedAt: new Date().toISOString(),
+                        status: 'Pending',
+                        approvedBy: null
+                    };
+                    await DB.saveExternalCertification(cert);
+                    UI.showAlert('Certification uploaded for approval', 'success');
+                    document.getElementById('ext-cert-form').reset();
+                    loadMyCerts();
+                    if (canReviewCerts) loadAdminCerts();
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // Load My Certs
+        async function loadMyCerts() {
+            const certs = (await DB.fetchExternalCertifications()).filter(c => c.uploadedBy === u.username);
+            const tbody = document.querySelector('#my-certs-table tbody');
+            if (certs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4">No uploads yet.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = certs.map(c => `
+                <tr>
+                    <td>${c.courseName}</td>
+                    <td>${c.completionDate}</td>
+                    <td>
+                        ${c.status === 'Approved' ? '<span class="badge badge-success">Approved</span>' : 
+                          c.status === 'Rejected' ? '<span class="badge badge-danger">Rejected</span>' : 
+                          '<span class="badge badge-warning">Pending</span>'}
+                    </td>
+                    <td>
+                        ${c.status === 'Approved' ? '<button class="btn btn-sm btn-info" onclick="viewCertFile(\\''+c.id+'\\')">View</button>' : '-'}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Load Admin Certs
+        async function loadAdminCerts() {
+            if (!canReviewCerts) return;
+            const certs = (await DB.fetchExternalCertifications()).filter(c => c.status === 'Pending');
+            const tbody = document.querySelector('#admin-certs-table tbody');
+            if (certs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5">No pending certifications.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = certs.map(c => `
+                <tr>
+                    <td>${c.uploadedBy}</td>
+                    <td>${c.courseName}</td>
+                    <td>${c.completionDate}</td>
+                    <td><button class="btn btn-sm btn-secondary" onclick="viewCertFile(\\''+c.id+'\\')">View File</button></td>
+                    <td>
+                        <button class="btn btn-sm btn-success" onclick="approveCert(\\''+c.id+'\\')">Approve</button>
+                        <button class="btn btn-sm btn-danger" onclick="rejectCert(\\''+c.id+'\\')">Reject</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        window.viewCertFile = async (id) => {
+            const cert = (await DB.fetchExternalCertifications()).find(c => c.id === id);
+            if (!cert) return;
+            const blob = b64toBlob(cert.fileData, cert.fileType || 'application/pdf');
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+        };
+
+        window.approveCert = async (id) => {
+            const allCerts = await DB.fetchExternalCertifications();
+            const cert = allCerts.find(c => c.id === id);
+            if (cert) {
+                cert.status = 'Approved';
+                cert.approvedBy = u.username;
+                await DB.saveExternalCertification(cert);
+                loadAdminCerts();
+                UI.showAlert('Certification Approved', 'success');
+            }
+        };
+
+        window.rejectCert = async (id) => {
+             const allCerts = await DB.fetchExternalCertifications();
+            const cert = allCerts.find(c => c.id === id);
+            if (cert) {
+                cert.status = 'Rejected';
+                cert.approvedBy = u.username;
+                await DB.saveExternalCertification(cert);
+                loadAdminCerts();
+                UI.showAlert('Certification Rejected', 'info');
+            }
+        }
+
+        // Initial calls
+        loadMyCerts();
+        if (canReviewCerts) loadAdminCerts();
+        loadProgressAdmin();
+        loadCatalog();
+        
+        async function computeProgress(username) {
+            const publishers = new Set(['steve.wafula', 'maxwel']);
+            const materials = (await DB.fetchTrainingMaterials()).filter(m => publishers.has(m.by));
+            const submissions = (await DB.fetchTrainingSubmissions()).filter(s => s.by === username);
+            const completions = (await DB.fetchTrainingCompletions()).filter(c => c.by === username);
+            const isCompleted = (m) => {
+                if (m.requirePdf) return submissions.some(s => s.materialId === m.id);
+                return completions.some(c => c.materialId === m.id);
+            };
+            const completedCount = materials.filter(isCompleted).length;
+            const mandatory = materials.filter(m => m.type === 'Mandatory');
+            const mandatoryCompleted = mandatory.filter(isCompleted).length;
+            const pendingMandatory = Math.max(0, mandatory.length - mandatoryCompleted);
+            const compliance = mandatory.length === 0 ? 100 : Math.round((mandatoryCompleted / mandatory.length) * 100);
+            return { completedCount, pendingMandatory, compliance };
+        }
+        async function renderMyProgress() {
+            const p = await computeProgress(u.username);
+            document.getElementById('tp-completed').textContent = p.completedCount.toString();
+            document.getElementById('tp-pending').textContent = p.pendingMandatory.toString();
+            document.getElementById('tp-compliance').textContent = `${p.compliance}%`;
+        }
+        renderMyProgress();
+        
+        window.openUpload = (materialId) => {
+            document.getElementById('upload-material-id').value = materialId;
+            document.getElementById('upload-modal').classList.remove('hidden');
+        };
+        window.closeUpload = () => {
+            document.getElementById('upload-modal').classList.add('hidden');
+            document.getElementById('pdf-upload-form').reset();
+        };
+        window.viewSubmission = async (submissionId) => {
+            const submissions = await DB.fetchTrainingSubmissions();
+            const sub = submissions.find(s => s.id === submissionId);
+            if (!sub) return UI.showAlert('Submission not found', 'error');
+            const blob = b64toBlob(sub.data, 'application/pdf');
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+        };
+        function b64toBlob(b64Data, contentType = '', sliceSize = 512) {
+            const byteCharacters = atob(b64Data);
+            const byteArrays = [];
+            for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+                const slice = byteCharacters.slice(offset, offset + sliceSize);
+                const byteNumbers = new Array(slice.length);
+                for (let i = 0; i < slice.length; i++) {
+                    byteNumbers[i] = slice.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                byteArrays.push(byteArray);
+            }
+            return new Blob(byteArrays, { type: contentType });
+        }
+        
+        document.getElementById('pdf-upload-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('upload-file');
+            const materialId = document.getElementById('upload-material-id').value;
+            const file = fileInput.files[0];
+            if (!file || file.type !== 'application/pdf') {
+                UI.showAlert('Please select a PDF file', 'error');
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = async () => {
+                const base64 = reader.result.split(',')[1];
+                const s = {
+                    id: 'SUB-' + Math.random().toString(36).slice(2, 8),
+                    materialId,
+                    by: u.username,
+                    fileName: file.name,
+                    size: file.size,
+                    date: new Date().toISOString(),
+                    data: base64,
+                    recipients: ['maxwel']
+                };
+                await DB.saveTrainingSubmission(s);
+                DB.addLog('Training Submission', `Uploaded PDF for ${materialId}`);
+                closeUpload();
+                loadCatalog();
+                renderMyProgress();
+                UI.showAlert('PDF submitted successfully', 'success');
+                if (canReceiveSubmissions) loadReceivedSubmissions();
+            };
+            reader.readAsDataURL(file);
+        });
+        
+        async function loadProgressAdmin() {
+            if (!canAdminProgress) return;
+            const userSelect = document.getElementById('progress-officer');
+            const users = (await DB.fetchUsers()).filter(x => x.role !== ROLES.CORE_TEAM);
+            userSelect.innerHTML = '';
+            users.forEach(uo => {
+                const opt = document.createElement('option');
+                opt.value = uo.username;
+                opt.textContent = `${uo.name} (${uo.username})`;
+                userSelect.appendChild(opt);
+            });
+            renderProgressMaterialsTable(userSelect.value);
+            userSelect.addEventListener('change', () => renderProgressMaterialsTable(userSelect.value));
+            document.getElementById('save-progress').addEventListener('click', () => saveProgress(userSelect.value));
+        }
+        async function renderProgressMaterialsTable(username) {
+            const tbody = document.querySelector('#progress-materials-table tbody');
+            const publishers = new Set(['steve.wafula', 'maxwel']);
+            const materials = (await DB.fetchTrainingMaterials()).filter(m => publishers.has(m.by));
+            const submissions = (await DB.fetchTrainingSubmissions()).filter(s => s.by === username);
+            const completions = (await DB.fetchTrainingCompletions()).filter(c => c.by === username);
+            tbody.innerHTML = '';
+            materials.forEach(m => {
+                const typeBadge = m.type === 'Mandatory' ? '<span class="badge badge-severe">Mandatory</span>' : '<span class="badge badge-new">Optional</span>';
+                const req = m.requirePdf ? 'Yes' : 'No';
+                const completed = m.requirePdf ? submissions.some(s => s.materialId === m.id) : completions.some(c => c.materialId === m.id);
+                const disabled = m.requirePdf ? 'disabled' : '';
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${m.title}</td>
+                    <td>${typeBadge}</td>
+                    <td>${req}</td>
+                    <td><input type="checkbox" data-mid="${m.id}" ${completed ? 'checked' : ''} ${disabled}></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+        async function saveProgress(username) {
+            const rows = Array.from(document.querySelectorAll('#progress-materials-table tbody input[type="checkbox"]'));
+            let completions = (await DB.fetchTrainingCompletions()).filter(c => c.by !== username);
+            const checks = rows.map(cb => ({ materialId: cb.getAttribute('data-mid'), checked: cb.checked }));
+            checks.forEach(ch => {
+                if (ch.checked) {
+                    completions.push({ id: 'CMP-' + Math.random().toString(36).slice(2,8), materialId: ch.materialId, by: username, date: new Date().toISOString() });
+                }
+            });
+            await DB.saveTrainingCompletions(completions.filter(c => c.by === username));
+            UI.showAlert('Progress updated', 'success');
+            if (username === u.username) {
+                renderMyProgress();
+            }
+        }
+        loadProgressAdmin();
+        
+        async function loadReceivedSubmissions() {
+            if (!canReceiveSubmissions) return;
+            const submissions = (await DB.fetchTrainingSubmissions())
+                .filter(s => Array.isArray(s.recipients) && s.recipients.includes(u.username));
+            const materials = await DB.fetchTrainingMaterials();
+            const tbody = document.querySelector('#submissions-table tbody');
+            tbody.innerHTML = '';
+            if (submissions.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5">No submissions yet.</td></tr>';
+                return;
+            }
+            submissions.forEach(s => {
+                const m = materials.find(x => x.id === s.materialId);
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${s.by}</td>
+                    <td>${m ? m.title : s.materialId}</td>
+                    <td>${s.fileName} (${Math.round(s.size / 1024)} KB)</td>
+                    <td>${new Date(s.date).toLocaleString()}</td>
+                    <td><button class="btn btn-secondary" onclick="viewSubmission('${s.id}')">View</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+        loadReceivedSubmissions();
+        
+        const originalViewSubmission = window.viewSubmission;
+        window.viewSubmission = (submissionId) => {
+            const submissions = JSON.parse(localStorage.getItem('nicms_training_submissions') || '[]');
+            const sub = submissions.find(s => s.id === submissionId);
+            if (!sub) return UI.showAlert('Submission not found', 'error');
+            
+            const isAuthor = sub.by === u.username;
+            const isAdmin = (u.role === 'core_team' || u.username === 'caleb' || u.username === 'musa.lepose' || u.username === 'maxwel');
+            const allowed = isAuthor || isAdmin || (Array.isArray(sub.recipients) && sub.recipients.includes(u.username));
+            
+            if (!allowed) {
+                UI.showAlert('Access denied', 'error');
+                return;
+            }
+            const blob = b64toBlob(sub.data, 'application/pdf');
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+        };
+        
+        window.downloadMaterial = (materialId) => {
+            const materials = JSON.parse(localStorage.getItem('nicms_training_materials') || '[]');
+            const m = materials.find(x => x.id === materialId);
+            if (!m || !m.pdfData) return UI.showAlert('PDF not available', 'error');
+            const blob = b64toBlob(m.pdfData, 'application/pdf');
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = m.pdfName || (m.title.replace(/\s+/g, '_') + '.pdf');
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
+    </script>
+</body>
+</html>
