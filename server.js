@@ -1,8 +1,12 @@
 const express = require('express')
 const cors = require('cors')
+const path = require('path')
 const app = express()
+
 app.use(cors())
-app.use(express.json({ limit: '5mb' }))
+app.use(express.json({ limit: '50mb' })) // Increased limit for PDF uploads
+app.use(express.static(__dirname)) // Serve static files from current directory
+
 const users = [
   { id: 1, username: 'admin', role: 'core_team', name: 'Dr. Admin', county: 'All' },
   { id: 2, username: 'jane.supervisor', role: 'supervisor', name: 'Sup. Jane', accessibleCounties: ['Nairobi'] },
@@ -54,6 +58,8 @@ let trainingMaterials = [
 ]
 let trainingSubmissions = []
 let trainingCompletions = []
+let externalCerts = []
+
 app.get('/api/health', (req, res) => res.json({ ok: true }))
 app.get('/api/users', (req, res) => res.json(users))
 app.post('/api/users/bulk', (req, res) => {
@@ -120,6 +126,18 @@ app.post('/api/training/completions', (req, res) => {
   trainingCompletions.push(body)
   res.json({ ok: true })
 })
+
+// External Certifications
+app.get('/api/training/external-certs', (req, res) => res.json(externalCerts))
+app.post('/api/training/external-certs', (req, res) => {
+  const c = req.body
+  if (!c || !c.id) return res.status(400).json({ ok: false })
+  const i = externalCerts.findIndex(x => x.id === c.id)
+  if (i >= 0) externalCerts[i] = c
+  else externalCerts.unshift(c)
+  res.json({ ok: true })
+})
+
 app.post('/api/sync', (req, res) => {
   const body = req.body || {}
   if (Array.isArray(body.users)) {
@@ -139,6 +157,26 @@ app.post('/api/sync', (req, res) => {
   if (Array.isArray(body.logs)) {
     body.logs.forEach(l => logs.unshift(l))
   }
+  // Sync External Certs
+  if (Array.isArray(body.externalCerts)) {
+    body.externalCerts.forEach(c => {
+        const i = externalCerts.findIndex(x => x.id === c.id)
+        if (i >= 0) externalCerts[i] = c
+        else externalCerts.unshift(c)
+    })
+  }
+  // Sync Training Materials
+  if (Array.isArray(body.trainingMaterials)) {
+    body.trainingMaterials.forEach(m => {
+        const i = trainingMaterials.findIndex(x => x.id === m.id)
+        if (i >= 0) trainingMaterials[i] = m
+        else trainingMaterials.unshift(m)
+    })
+  }
   res.json({ ok: true })
 })
-app.listen(3000, () => {})
+
+const PORT = process.env.PORT || 3000
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`)
+})

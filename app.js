@@ -59,9 +59,16 @@ const USERS = [
     ,{ id: 30, username: 'levi', password: 'password', role: ROLES.SUPERVISOR, name: 'Levi Pala', county: 'All' }
 ];
 
-const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:' 
-    ? 'http://localhost:3000/api' 
-    : `http://${window.location.hostname}:3000/api`;
+const API_BASE = (() => {
+    const host = window.location.hostname;
+    // Local development
+    if (host === 'localhost' || host === '127.0.0.1' || window.location.protocol === 'file:') {
+        return 'http://localhost:3000/api';
+    }
+    // Production (Railway/etc): Assume API is served from the same origin under /api
+    return '/api';
+})();
+
 async function apiFetch(path, options = {}, retries = 3, backoffMs = 200) {
     try {
         const res = await fetch(API_BASE + path, options);
@@ -160,7 +167,11 @@ const DB = {
                 body: JSON.stringify({
                     users: JSON.parse(localStorage.getItem('nicms_users') || '[]'),
                     cases: JSON.parse(localStorage.getItem('nicms_cases') || '[]'),
-                    logs: JSON.parse(localStorage.getItem('nicms_logs') || '[]')
+                    logs: JSON.parse(localStorage.getItem('nicms_logs') || '[]'),
+                    externalCerts: JSON.parse(localStorage.getItem('nicms_external_certs') || '[]'),
+                    trainingMaterials: JSON.parse(localStorage.getItem('nicms_training_materials') || '[]'),
+                    trainingSubmissions: JSON.parse(localStorage.getItem('nicms_training_submissions') || '[]'),
+                    trainingCompletions: JSON.parse(localStorage.getItem('nicms_training_completions') || '[]')
                 })
             });
         } catch (_) {}
